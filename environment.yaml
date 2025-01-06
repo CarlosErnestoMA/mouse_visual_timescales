@@ -20,7 +20,7 @@ dependencies:
   - xarray # update for pandas
   - pandas=2.0.3
   - pytables
-  - matplotlib
+  - matplotlib=3.7.3 # more recent versions don't work with seaborn 0.11.2
   - seaborn=0.11.2 # pauls split violins only work with version < 0.12
   - palettable
   - networkx

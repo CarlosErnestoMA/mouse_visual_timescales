@@ -1,9 +1,11 @@
+experiment_analysis/notebooks/exploration/* #allows creation of python notebooks without cluttering the repo 
 experiment_analysis/dat/*
 experiment_analysis/img/*
 branching_network/dat/*
 branching_network/img/*
 supplementary_material/dat/*
 supplementary_material/img/*
+
 
 *.pdf
 *~
