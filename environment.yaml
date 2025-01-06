@@ -35,6 +35,7 @@ dependencies:
   - humanize
   - pytest
   - pyfftw=0.13 # there might be a bug in the pyfftw _conda_ package: https://github.com/pyFFTW/pyFFTW/issues/294, but we do not use the fft in the main code, anymore. thus, minor issue.
+  - allensdk # Added this after creating environment, haven't tested creating the environment with this dependency here
   - pip
   - pip:
     - watermark
