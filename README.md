@@ -1,14 +1,18 @@
 # _Code repository:_ Signatures of hierarchical temporal processing in the mouse visual system
 
 
-This repository contains the analysis pipeline and plotting routines for our preprint
-
-[Arxiv]()
+This repository contains the analysis pipeline and plotting routines for our paper [@PLOS Computational Biology.](https://doi.org/10.1371/journal.pcbi.1012355)
 
 ```
-@misc{rudelt_signatures_2023,
-  doi = {},
-  url = {},
+@article{rudelt2024signatures,
+  title={Signatures of hierarchical temporal processing in the mouse visual system},
+  author={Rudelt, Lucas and Gonz{\'a}lez Marx, Daniel and Spitzner, F Paul and Cramer, Benjamin and Zierenberg, Johannes and Priesemann, Viola},
+  journal={PLOS Computational Biology},
+  volume={20},
+  number={8},
+  pages={e1012355},
+  year={2024},
+  publisher={Public Library of Science San Francisco, CA USA}
 }
 ```
 
