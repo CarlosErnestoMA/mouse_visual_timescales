@@ -7,7 +7,7 @@ import pandas as pd
 
 from allensdk.brain_observatory.ecephys.ecephys_project_cache import EcephysProjectCache
 
-data_directory = os.path.abspath("/path/to/repo/experiment_analysis/dat/")
+data_directory = os.path.abspath("/home/carlos/Git/CarlosErnestoMA/mouse_visual_timescales/experiment_analysis/dat/")
 manifest_path = os.path.join(data_directory, "manifest.json")
 
 cache = EcephysProjectCache.from_warehouse(manifest=manifest_path)
