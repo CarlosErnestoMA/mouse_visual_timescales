@@ -121,7 +121,7 @@ def all_unit_metadata(
         to avoid loading data you don't need.
     """
 
-    # lets be smart about this and not load this from disk every times
+    # lets be smart about this and not load this from disk every time
     global _meta_df
     if not reload and _meta_df is not None:
         log.debug("Using cached metadata")
