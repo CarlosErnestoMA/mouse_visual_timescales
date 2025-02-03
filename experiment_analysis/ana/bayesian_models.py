@@ -452,3 +452,235 @@ class StructureGroupModel(ModelBase):
                 observed=df[f"z_log_{measure}"],
                 dims="datapoint",
             )
+
+class LinearMedianModelWithLayers(ModelBase):
+    def __init__(self, df, measure, noncentered=True, name=""):
+
+        # See LinearMedianModel for comments on the code in this section
+        df = self.prepare_data(df)
+
+        session_idx, sessions = pd.factorize(df["session"])
+        df["session_idx"] = session_idx
+        num_sessions = len(sessions)
+
+        # This adds data indicating if a unit corresponds to a given layer
+        layer_names = ["2/3", "4", "5", "6"]
+        for layer in layer_names:
+            df[f"is_layer_{layer}"] = (df["layer"] == layer).astype(int)
+            log.info(f"Layer {layer} counts:\n{df[f'is_layer_{layer}'].value_counts()}")
+
+        coords = {
+            "session": np.unique(session_idx),
+            "datapoint": np.arange(len(df)),
+        }
+
+        super().__init__(name=name, model=None, coords=coords)
+        
+        ###############
+        # hyperpriors #
+        ###############
+        # The following hyperpiors are added to include the layer variables.
+        # Layer 2/3
+        mu_layer_23_offset = pm.Normal("mu_layer_23_offset", mu=0.0, sigma=1.0)
+        sigma_layer_23_offset = pm.HalfCauchy("sigma_layer_23_offset", beta=1.0)
+        
+        # Layer 4
+        mu_layer_4_offset = pm.Normal("mu_layer_4_offset", mu=0.0, sigma=1.0)
+        sigma_layer_4_offset = pm.HalfCauchy("sigma_layer_4_offset", beta=1.0)
+
+        # Layer 5
+        mu_layer_5_offset = pm.Normal("mu_layer_5_offset", mu=0.0, sigma=1.0)
+        sigma_layer_5_offset = pm.HalfCauchy("sigma_layer_5_offset", beta=1.0)
+
+        # Layer 6
+        mu_layer_6_offset = pm.Normal("mu_layer_6_offset", mu=0.0, sigma=1.0)
+        sigma_layer_6_offset = pm.HalfCauchy("sigma_layer_6_offset", beta=1.0)
+
+        # The following hyperpriors are the same as in the LinearMedianMode
+        mu_intercept = pm.Normal("mu_intercept", mu=0.0, sigma=1.0)
+        sigma_intercept = pm.HalfCauchy("sigma_intercept", beta=1.0)
+
+        mu_slope = pm.Normal("mu_slope", mu=0.0, sigma=1.0)
+        sigma_slope = pm.HalfCauchy("sigma_slope", beta=1.0)
+
+        if noncentered is False:
+            session_intercept = pm.Normal(
+                "session_intercept",
+                mu=mu_intercept,
+                sigma=sigma_intercept,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_slope = pm.Normal(
+                "session_slope",
+                mu=mu_slope,
+                sigma=sigma_slope,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            # Layer priors
+            session_layer_23_offset = pm.Normal(
+                "session_layer_23_offset",
+                mu=mu_layer_23_offset,
+                sigma=sigma_layer_23_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_4_offset = pm.Normal(
+                "session_layer_4_offset",
+                mu=mu_layer_4_offset,
+                sigma=sigma_layer_4_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_5_offset = pm.Normal(
+                "session_layer_5_offset",
+                mu=mu_layer_5_offset,
+                sigma=sigma_layer_5_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_6_offset = pm.Normal(
+                "session_layer_6_offset",
+                mu=mu_layer_6_offset,
+                sigma=sigma_layer_6_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+        else:
+            # avoid funnel of hell
+            # https://twiecki.io/blog/2017/02/08/bayesian-hierchical-non-centered/
+            session_intercept_scaled = pm.Normal(
+                "session_intercept_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_intercept = pm.Deterministic(
+                "session_intercept",
+                mu_intercept + session_intercept_scaled * sigma_intercept,
+                dims="session",
+            )
+
+            session_slope_scaled = pm.Normal(
+                "session_slope_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_slope = pm.Deterministic(
+                "session_slope",
+                mu_slope + session_slope_scaled * sigma_slope,
+                dims="session",
+            )
+
+            # Layer priors
+            session_layer_23_offset_scaled = pm.Normal(
+                "session_layer_23_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_23_offset = pm.Deterministic(
+                "session_layer_23_offset",
+                mu_layer_23_offset + session_layer_23_offset_scaled * sigma_layer_23_offset,
+                dims="session",
+            )
+                
+            session_layer_4_offset_scaled = pm.Normal(
+                "session_layer_4_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_4_offset = pm.Deterministic(
+                "session_layer_4_offset",
+                mu_layer_4_offset + session_layer_4_offset_scaled * sigma_layer_4_offset,
+                dims="session",
+            )
+
+            session_layer_5_offset_scaled = pm.Normal(
+                "session_layer_5_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_5_offset = pm.Deterministic(
+                "session_layer_5_offset",
+                mu_layer_5_offset + session_layer_5_offset_scaled * sigma_layer_5_offset,
+                dims="session",
+            )
+
+            session_layer_6_offset_scaled = pm.Normal(
+                "session_layer_6_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_6_offset = pm.Deterministic(
+                "session_layer_6_offset",
+                mu_layer_6_offset + session_layer_6_offset_scaled * sigma_layer_6_offset,
+                dims="session",
+            )
+
+            
+        b_os_rf = pm.Normal("b_os_rf", mu=0.0, sigma=1.0)
+        b_log_fr = pm.Normal("b_log_fr", mu=0.0, sigma=1.0)
+
+
+        yest = (
+            # linear model for median, since we fit to log-data, we have to log-trafo
+            # out linear slopes and intercepts
+            pm.math.log(
+                # session-level intercept. one for each sessions
+                session_intercept[session_idx]
+                # session-level slope x neuron hierarchy score
+                + session_slope[session_idx]
+                * df["z_hierarchy_score"].values
+                # offsets for each layer
+                + session_layer_23_offset[session_idx] * df["is_layer_2/3"].values
+                + session_layer_4_offset[session_idx] * df["is_layer_4"].values
+                + session_layer_5_offset[session_idx] * df["is_layer_5"].values
+                + session_layer_6_offset[session_idx] * df["is_layer_6"].values
+            )
+            # per-unit terms
+            + b_os_rf * df["on_screen_rf"].values 
+            + b_log_fr * df["z_log_firing_rate"].values
+        )
+
+        # define normal likelihood with halfnormal error
+        epsilon = pm.HalfCauchy("epsilon", 10.0)
+
+        if measure == "R_tot":
+            likelihood = pm.Normal(
+                "likelihood",
+                mu=yest,
+                sigma=epsilon,
+                observed=df[f"z_log_{measure}"],
+                dims="datapoint",
+            )
+        else:
+            alpha = pm.Normal("alpha", mu=0.0, sigma=1.0)
+            likelihood = pm.SkewNormal(
+                "likelihood",
+                mu=yest,
+                sigma=epsilon,
+                alpha=alpha,
+                observed=df[f"z_log_{measure}"],
+                dims="datapoint",
+            )
