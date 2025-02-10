@@ -456,9 +456,10 @@ class StructureGroupModel(ModelBase):
 class LinearMedianModelWithLayers(ModelBase):
     def __init__(self, df, measure, noncentered=True, name=""):
 
-        # See LinearMedianModel for comments on the code in this section
+        # this copies df, prepares and assigns self.df
         df = self.prepare_data(df)
 
+        # to model session-level details, we need a lookup row -> session_idx
         session_idx, sessions = pd.factorize(df["session"])
         df["session_idx"] = session_idx
         num_sessions = len(sessions)
@@ -468,7 +469,6 @@ class LinearMedianModelWithLayers(ModelBase):
         for layer in layer_names:
             df[f"is_layer_{layer}"] = (df["layer"] == layer).astype(int)
             log.info(f"Layer {layer} counts:\n{df[f'is_layer_{layer}'].value_counts()}")
-
         coords = {
             "session": np.unique(session_idx),
             "datapoint": np.arange(len(df)),
@@ -480,13 +480,10 @@ class LinearMedianModelWithLayers(ModelBase):
         # hyperpriors #
         ###############
         # The following hyperpiors are added to include the layer variables.
+        # The offsets are relative to layer 4
         # Layer 2/3
         mu_layer_23_offset = pm.Normal("mu_layer_23_offset", mu=0.0, sigma=1.0)
         sigma_layer_23_offset = pm.HalfCauchy("sigma_layer_23_offset", beta=1.0)
-        
-        # Layer 4
-        mu_layer_4_offset = pm.Normal("mu_layer_4_offset", mu=0.0, sigma=1.0)
-        sigma_layer_4_offset = pm.HalfCauchy("sigma_layer_4_offset", beta=1.0)
 
         # Layer 5
         mu_layer_5_offset = pm.Normal("mu_layer_5_offset", mu=0.0, sigma=1.0)
@@ -525,14 +522,6 @@ class LinearMedianModelWithLayers(ModelBase):
                 "session_layer_23_offset",
                 mu=mu_layer_23_offset,
                 sigma=sigma_layer_23_offset,
-                shape=num_sessions,
-                dims="session",
-            )
-
-            session_layer_4_offset = pm.Normal(
-                "session_layer_4_offset",
-                mu=mu_layer_4_offset,
-                sigma=sigma_layer_4_offset,
                 shape=num_sessions,
                 dims="session",
             )
@@ -595,20 +584,6 @@ class LinearMedianModelWithLayers(ModelBase):
                 mu_layer_23_offset + session_layer_23_offset_scaled * sigma_layer_23_offset,
                 dims="session",
             )
-                
-            session_layer_4_offset_scaled = pm.Normal(
-                "session_layer_4_offset_scaled",
-                mu=0.0,
-                sigma=1.0,
-                shape=num_sessions,
-                dims="session",
-            )
-
-            session_layer_4_offset = pm.Deterministic(
-                "session_layer_4_offset",
-                mu_layer_4_offset + session_layer_4_offset_scaled * sigma_layer_4_offset,
-                dims="session",
-            )
 
             session_layer_5_offset_scaled = pm.Normal(
                 "session_layer_5_offset_scaled",
@@ -652,12 +627,11 @@ class LinearMedianModelWithLayers(ModelBase):
                 # session-level slope x neuron hierarchy score
                 + session_slope[session_idx]
                 * df["z_hierarchy_score"].values
-                # offsets for each layer
-                + session_layer_23_offset[session_idx] * df["is_layer_2/3"].values
-                + session_layer_4_offset[session_idx] * df["is_layer_4"].values
-                + session_layer_5_offset[session_idx] * df["is_layer_5"].values
-                + session_layer_6_offset[session_idx] * df["is_layer_6"].values
             )
+             # offsets for each layer
+            + session_layer_23_offset[session_idx] * df["is_layer_2/3"].values
+            + session_layer_5_offset[session_idx] * df["is_layer_5"].values
+            + session_layer_6_offset[session_idx] * df["is_layer_6"].values
             # per-unit terms
             + b_os_rf * df["on_screen_rf"].values 
             + b_log_fr * df["z_log_firing_rate"].values
