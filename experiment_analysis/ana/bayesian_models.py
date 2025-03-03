@@ -453,10 +453,27 @@ class StructureGroupModel(ModelBase):
                 dims="datapoint",
             )
 
-class LinearMedianModelWithLayers(ModelBase):
+class StructureGroupModelWithLayers(ModelBase):
     def __init__(self, df, measure, noncentered=True, name=""):
 
-        # this copies df, prepares and assigns self.df
+        df = df.copy()
+
+        # for the structure group model, we need to select data from higher cortical and thalamus, respectively.
+        # add a column each that is (1) if the neuron is in this group else (0)
+        df["is_higher_cortical"] = (
+            df["structure_name"].isin(["LM", "RL", "AL", "PM", "AM"]).astype("int")
+        )
+        df["is_thalamus"] = df["structure_name"].isin(["LGN", "LP"]).astype("int")
+
+        log.info(df["is_higher_cortical"].value_counts())
+        log.info(df["is_thalamus"].value_counts())
+
+        # Add data indicating if a unit corresponds to a given layer
+        layer_names = ["2/3", "4", "5", "6"]
+        for layer in layer_names:
+            df[f"is_layer_{layer}"] = (df["layer"] == layer).astype(int)
+            log.info(f"Layer {layer} counts:\n{df[f'is_layer_{layer}'].value_counts()}")
+
         df = self.prepare_data(df)
 
         # to model session-level details, we need a lookup row -> session_idx
@@ -464,11 +481,237 @@ class LinearMedianModelWithLayers(ModelBase):
         df["session_idx"] = session_idx
         num_sessions = len(sessions)
 
-        # This adds data indicating if a unit corresponds to a given layer
+        # it helps readability of arviz to define dimensionality via coords:
+        # https://www.pymc.io/projects/docs/en/v5.10.2/learn/core_notebooks/dimensionality.html#dims
+        # this enables e.g. `idata.sel(session=0)`
+        coords = {
+            # we could use the real sessions of the data, but this makes it harder to index.
+            "session": np.unique(session_idx),
+            "datapoint": np.arange(len(df)),
+        }
+
+        super().__init__(name=name, model=None, coords=coords)
+
+        ###############
+        # hyperpriors #
+        ###############
+        mu_intercept = pm.Normal("mu_intercept", mu=0.0, sigma=1.0)
+        sigma_intercept = pm.HalfCauchy("sigma_intercept", beta=0.1)
+
+        # higher cortical
+        mu_hc_offset = pm.Normal("mu_hc_offset", mu=0.0, sigma=1.0)
+        sigma_hc_offset = pm.HalfCauchy("sigma_hc_offset", beta=1.0)
+
+        # thalamus
+        mu_th_offset = pm.Normal("mu_th_offset", mu=0.0, sigma=1.0)
+        sigma_th_offset = pm.HalfCauchy("sigma_th_offset", beta=1.0)
+        
+        # layer specific:
+        # Layer 2/3
+        mu_layer_23_offset = pm.Normal("mu_layer_23_offset", mu=0.0, sigma=1.0)
+        sigma_layer_23_offset = pm.HalfCauchy("sigma_layer_23_offset", beta=1.0)
+
+        # Layer 5
+        mu_layer_5_offset = pm.Normal("mu_layer_5_offset", mu=0.0, sigma=1.0)
+        sigma_layer_5_offset = pm.HalfCauchy("sigma_layer_5_offset", beta=1.0)
+
+        # Layer 6
+        mu_layer_6_offset = pm.Normal("mu_layer_6_offset", mu=0.0, sigma=1.0)
+        sigma_layer_6_offset = pm.HalfCauchy("sigma_layer_6_offset", beta=1.0)
+
+        if noncentered is False:
+            session_intercept = pm.Normal(
+                "session_intercept",
+                mu=mu_intercept,
+                sigma=sigma_intercept,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_hc_offset = pm.Normal(
+                "session_hc_offset",
+                mu=mu_hc_offset,
+                sigma=sigma_hc_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_th_offset = pm.Normal(
+                "session_th_offset",
+                mu=mu_th_offset,
+                sigma=sigma_th_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            # Layer priors
+            session_layer_23_offset = pm.Normal(
+                "session_layer_23_offset",
+                mu=mu_layer_23_offset,
+                sigma=sigma_layer_23_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_5_offset = pm.Normal(
+                "session_layer_5_offset",
+                mu=mu_layer_5_offset,
+                sigma=sigma_layer_5_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_6_offset = pm.Normal(
+                "session_layer_6_offset",
+                mu=mu_layer_6_offset,
+                sigma=sigma_layer_6_offset,
+                shape=num_sessions,
+                dims="session",
+            )
+
+        else:
+            session_intercept_scaled = pm.Normal(
+                "session_intercept_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_intercept = pm.Deterministic(
+                "session_intercept",
+                mu_intercept + session_intercept_scaled * sigma_intercept,
+                dims="session",
+            )
+
+            session_hc_offset_scaled = pm.Normal(
+                "session_hc_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_hc_offset = pm.Deterministic(
+                "session_hc_offset",
+                mu_hc_offset + session_hc_offset_scaled * sigma_hc_offset,
+                dims="session",
+            )
+
+            session_th_offset_scaled = pm.Normal(
+                "session_th_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+            session_th_offset = pm.Deterministic(
+                "session_th_offset",
+                mu_th_offset + session_th_offset_scaled * sigma_th_offset,
+                dims="session",
+            )
+
+            # Layer priors
+            session_layer_23_offset_scaled = pm.Normal(
+                "session_layer_23_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_23_offset = pm.Deterministic(
+                "session_layer_23_offset",
+                mu_layer_23_offset + session_layer_23_offset_scaled * sigma_layer_23_offset,
+                dims="session",
+            )
+
+            session_layer_5_offset_scaled = pm.Normal(
+                "session_layer_5_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_5_offset = pm.Deterministic(
+                "session_layer_5_offset",
+                mu_layer_5_offset + session_layer_5_offset_scaled * sigma_layer_5_offset,
+                dims="session",
+            )
+
+            session_layer_6_offset_scaled = pm.Normal(
+                "session_layer_6_offset_scaled",
+                mu=0.0,
+                sigma=1.0,
+                shape=num_sessions,
+                dims="session",
+            )
+
+            session_layer_6_offset = pm.Deterministic(
+                "session_layer_6_offset",
+                mu_layer_6_offset + session_layer_6_offset_scaled * sigma_layer_6_offset,
+                dims="session",
+            )
+
+        # global_intercept = pm.Normal("global_intercept", mu=0.0, sigma=1.0)
+        b_os_rf = pm.Normal("b_os_rf", mu=0.0, sigma=1.0)
+        b_log_fr = pm.Normal("b_log_fr", mu=0.0, sigma=1.0)
+
+        yest = (
+            pm.math.log(
+                # session-level intercept (for V1). one for each sessions
+                session_intercept[session_idx]
+                # offset of higher cortical areas relative to V1
+                + session_hc_offset[session_idx] * df["is_higher_cortical"].values
+                # offset of thalamic areas relative to V1
+                + session_th_offset[session_idx] * df["is_thalamus"].values
+            )
+            # offsets for each layer
+            + session_layer_23_offset[session_idx] * df["is_layer_2/3"].values
+            + session_layer_5_offset[session_idx] * df["is_layer_5"].values
+            + session_layer_6_offset[session_idx] * df["is_layer_6"].values
+            # per-unit terms
+            + b_os_rf * df["on_screen_rf"].values
+            + b_log_fr * df["z_log_firing_rate"].values
+        )
+
+        # define normal likelihood with halfnormal error
+        epsilon = pm.HalfCauchy("epsilon", 10.0)
+
+        if measure == "R_tot":
+            likelihood = pm.Normal(
+                "likelihood",
+                mu=yest,
+                sigma=epsilon,
+                observed=df[f"z_log_{measure}"],
+                dims="datapoint",
+            )
+        else:
+            alpha = pm.Normal("alpha", mu=0.0, sigma=1.0)
+            likelihood = pm.SkewNormal(
+                "likelihood",
+                mu=yest,
+                sigma=epsilon,
+                alpha=alpha,
+                observed=df[f"z_log_{measure}"],
+                dims="datapoint",
+            )
+
+class LinearMedianModelWithLayers(ModelBase):
+    def __init__(self, df, measure, noncentered=True, name=""):
+
+        df = df.copy()
+
+        # Add data indicating if a unit corresponds to a given layer
         layer_names = ["2/3", "4", "5", "6"]
         for layer in layer_names:
             df[f"is_layer_{layer}"] = (df["layer"] == layer).astype(int)
             log.info(f"Layer {layer} counts:\n{df[f'is_layer_{layer}'].value_counts()}")
+
+        df = self.prepare_data(df)
+
+        # to model session-level details, we need a lookup row -> session_idx
+        session_idx, sessions = pd.factorize(df["session"])
+        df["session_idx"] = session_idx
+        num_sessions = len(sessions)
+
         coords = {
             "session": np.unique(session_idx),
             "datapoint": np.arange(len(df)),
@@ -628,7 +871,7 @@ class LinearMedianModelWithLayers(ModelBase):
                 + session_slope[session_idx]
                 * df["z_hierarchy_score"].values
             )
-             # offsets for each layer
+            # offsets for each layer
             + session_layer_23_offset[session_idx] * df["is_layer_2/3"].values
             + session_layer_5_offset[session_idx] * df["is_layer_5"].values
             + session_layer_6_offset[session_idx] * df["is_layer_6"].values
